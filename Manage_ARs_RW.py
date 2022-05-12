@@ -18,9 +18,6 @@ If you have any questions, please reach out to me.
 """
 __author__ = "Nick Hurst nhurst@riverbed.com"
 
-#test
-
-#from re import L
 import requests
 import json
 from getpass import getpass
