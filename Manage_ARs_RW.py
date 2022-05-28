@@ -18,6 +18,9 @@ If you have any questions, please reach out to me.
 """
 __author__ = "Nick Hurst nhurst@riverbed.com"
 
+import logging
+import logging.config
+import yaml 
 import requests
 import json
 from getpass import getpass
@@ -27,7 +30,11 @@ import appresponse_device
 import argparse
 import csv
 
+with open('logging.conf', "r") as f:
+    config = yaml.safe_load(f)
+    logging.config.dictConfig(config)
 
+logger = logging.getLogger(__name__)
 
 COLUMN_TITLE_NUMBER = 1
 MGMT_SPREADSHEET_PATH = 'AR_Management.xlsx'
@@ -65,41 +72,50 @@ APPLICATIONS_COL_NAME_LIST = ["name","desc","enable","traffic_match_mode","inclu
 def string_to_list(received_string):
     disallowed_characters = ["[","]","'"," "]
     return_list = []
+    logger.debug(f"orginal string '{received_string}' that will be converted to list")
     for disallowed_character in disallowed_characters:
         received_string = received_string.replace(disallowed_character,"")
+
     if received_string == "":
         return_list== []
     else:
         return_list = received_string.split(",")
+    logger.debug(f"string '{received_string}', after disallowed chars removed'{disallowed_characters}'  to list '{return_list}'")
     return return_list
 
 def string_of_strings_to_list(received_string):
     disallowed_characters = ["[","]","'"]
     return_list = []
+    logger.debug(f"orginal string of strings '{received_string}' that will be converted to list")
     for disallowed_character in disallowed_characters:
         received_string = received_string.replace(disallowed_character,"")
     if received_string == "":
         return_list== []
     else:
         return_list = received_string.split(", ") #had to split on ", " not just "," due to space in list to string form AR11 into excel
+    logger.debug(f"string of strings '{received_string}' after disallowed chars removed'{disallowed_characters}'  to list '{return_list}'")
     return return_list
     
 def setup_worksheet(received_work_book,received_worksheet_name,received_columns_names_list):
     if received_worksheet_name in received_work_book.sheetnames:
         worksheet = received_work_book[received_worksheet_name]
         received_work_book.remove(worksheet)
+
+        logger.debug(f'spreadsheet {received_work_book},already had worksheet {received_work_book}, therefore removed')
     
     received_work_book.create_sheet(received_worksheet_name)
+    logger.debug(f'created worksheet {received_worksheet_name} in spreadsheet {received_work_book}')
     worksheet = received_work_book[received_worksheet_name]
 
     worksheet.cell(1,1).value = AR_LIST_COL_NAME
     col_num = 2
     for col_name in received_columns_names_list:
         worksheet.cell(1,col_num).value = col_name
+        logger.debug(f'created column {col_name} in worksheet {received_worksheet_name}, row 1 , col {col_num}')
         col_num += 1
 
 def setup_management_spreadsheet(received_spreadsheet_path):
-
+    logger.info(f'setup config spreadsheet {received_spreadsheet_path}')
     ar_config_work_book = openpyxl.Workbook()
 
     setup_worksheet(ar_config_work_book,NTP_WORKSHEET_NAME,NTP_COL_NAME_LIST)
@@ -114,12 +130,10 @@ def setup_management_spreadsheet(received_spreadsheet_path):
     setup_worksheet(ar_config_work_book,URL_WORKSHEET_NAME,URL_COL_NAME_LIST)
 
     ar_config_work_book.save(received_spreadsheet_path)
+    logger.debug(f"spreadsheet saved to '{received_spreadsheet_path}'")
     
 def update_spreadsheet_with_config(received_spreadsheet_path,received_ar_config):
-
-    #>>> source = wb.active
-    #>>> target = wb.copy_worksheet(source)
-
+    logger.debug("start - update_spreadsheet_with_config")
     ar_config_work_book = openpyxl.load_workbook(received_spreadsheet_path)
     #fill all relevant worksheets with the there relevant AR information
     update_ntp_worksheet(received_ar_config.ip_addr,received_ar_config.ntp_original_data,ar_config_work_book,NTP_WORKSHEET_NAME)
@@ -133,6 +147,7 @@ def update_spreadsheet_with_config(received_spreadsheet_path,received_ar_config)
     update_hostgroups_worksheet(received_ar_config.ip_addr,received_ar_config.hostgroups_original_data,ar_config_work_book,HOSTGROUPS_WORKSHEET_NAME)
     update_urls_worksheet(received_ar_config.ip_addr,received_ar_config.urls_original_data,ar_config_work_book,URL_WORKSHEET_NAME)
     ar_config_work_book.save(received_spreadsheet_path)
+    logger.debug("finish - update_spreadsheet_with_config")
 
 def find_column_with_title(received_title_name,received_worksheet):
     for col_num in range(COLUMN_TITLE_NUMBER,received_worksheet.max_column+1):
@@ -147,7 +162,7 @@ def get_ar_bearer_token(received_username,received_password,received_ar_ip_addr)
         "user_credentials": {
             "username": received_username,
             "password": received_password
-        }
+        } 
         })
     headers = {
         'Content-Type': 'application/json'
@@ -155,25 +170,32 @@ def get_ar_bearer_token(received_username,received_password,received_ar_ip_addr)
     try:
         response = requests.request("POST", url, headers=headers, data=payload,verify=False)
     except Exception as error_message:
-        print (error_message)
+        logger.exception(error_message)
     else:
         try:
             json_response = json.loads(response.text)
-            print(f"bearer Token is: {json_response['access_token']}")
             bearer_token = json_response['access_token']
         except:
-            print(f'failed to get bearer token from AR {received_ar_ip_addr} - data received was - \n\t{response.text}')
+            logger.exception()
+            logger.error(f'failed to get bearer token from AR {received_ar_ip_addr} - data received was - \n\t{response.text}')
     return bearer_token
 
 def confirm_rest_api_access_to_ARs_and_get_bearer_token(received_username,received_password,received_ar_ip_addr_list):
+
     ar_ip_addr_and_bearer_token_list = []
     for ar_ip_addr in received_ar_ip_addr_list:
-        print(ar_ip_addr)
+        logger.info(f'getting bearer token for {ar_ip_addr}')
         bearer_token = (get_ar_bearer_token(received_username,received_password,ar_ip_addr))
+        logger.debug(f'bearer token for {ar_ip_addr} is {bearer_token}')
         #if the received bearer token isn't blank then we know we can access the REST API of the AR so we add to the AR list with bearer token
         if bearer_token !="":
+            
             ar_ip_addr_and_bearer_token={'bear_token':bearer_token, 'ar_ip_addr':ar_ip_addr}
             ar_ip_addr_and_bearer_token_list.append(ar_ip_addr_and_bearer_token)
+            logger.info(f'add bearer and {ar_ip_addr} to list to return')
+        else: 
+            logger.error(f'bearer token from {"ar_ip_addr":ar_ip_addr} is blank')
+
     return (ar_ip_addr_and_bearer_token_list)
 
 def update_ntp_worksheet(received_ar_ip_addr,received_ntp_config_list,received_workbook,received_ntp_worksheet_name):
@@ -284,6 +306,7 @@ def update_urls_worksheet(received_ar_ip_addr,received_configs,received_workbook
         urls_worksheet.cell(row_num,5).value=item.get("preferred")
         urls_worksheet.cell(row_num,6).value=str(item.get("urls"))
         urls_worksheet.cell(row_num,7).value=item.get("id")
+        row_num += 1
 
 def update_apps_worksheet(received_ar_ip_addr,received_configs,received_workbook,received_worksheet_name):
     apps_worksheet = received_workbook[received_worksheet_name]
@@ -368,6 +391,7 @@ def get_AR_configuration_and_update_AR_mgmt_spreadsheet(received_username,receiv
         setup_management_spreadsheet(MGMT_SPREADSHEET_PATH)
 
         ars = []
+        logger.debug('loop throught at list')
         for ar_info in active_ar_list:
 
             Ar_Device = appresponse_device.AppResponse(ar_info['ar_ip_addr'],ar_info['bear_token'])
@@ -376,7 +400,7 @@ def get_AR_configuration_and_update_AR_mgmt_spreadsheet(received_username,receiv
 
             ars.append(Ar_Device)
     else:
-        print(f"unable to list of AppResponses from -----> {received_csv_file_path}")
+        logger.error(f"unable to list of AppResponses from -----> {received_csv_file_path}")
 
     return ars
 
@@ -385,13 +409,17 @@ def get_ar_list_from_ar_list_csv_file(received_csv_file_path):
 
     try:
         with open(received_csv_file_path,'r') as csv_file:
+            logger.info (f'opened file {AR_LIST_CSV_FILE_PATH}')
             #read data in from csv into a dictionary. Import that header information has a header called "ar_list"
             csv_reader = csv.DictReader(csv_file)
 
             for line in csv_reader:
                 ar_list.append(line.get('ar_list'))
+            logger.info(f'Got list of AppResponses, total number {len(ar_list)}')
     except:
-        print(f"faile to find---> {AR_LIST_CSV_FILE_PATH}")
+        logger.error (f'faile to find---> {AR_LIST_CSV_FILE_PATH}')
+        logger.exception()
+
 
     #if returned import is "[None]" then we convert it to an empty list
     if ar_list == [None]:
@@ -427,6 +455,7 @@ def get_snmp_config_from_spreadsheet_for_this_ar(received_config_spreadsheet,rec
     version_configuration['privacy_passphrase']=snmp_worksheet.cell(row_num,13).value  
 
     snmp_config['version_configuration'] = version_configuration
+    logger.info("got new snmp config from spreadsheet")
 
     return snmp_config
 
@@ -444,7 +473,8 @@ def get_dns_config_from_spreadsheet_for_this_ar(received_config_spreadsheet,rece
     dns_config["hostname"]= dns_worksheet.cell(ar_row_num,2).value 
     dns_config["dns_servers"]= string_to_list(dns_worksheet.cell(ar_row_num,3).value)
     dns_config["dns_domains"]= string_to_list(dns_worksheet.cell(ar_row_num,4).value)
-
+    dns_config["hosts"]= []
+    logger.info("got new dns config from spreadsheet")
     return dns_config
 
 def get_ntp_config_from_spreadsheet_for_this_ar(received_config_spreadsheet,received_ar_ip_addr):
@@ -464,6 +494,7 @@ def get_ntp_config_from_spreadsheet_for_this_ar(received_config_spreadsheet,rece
             ntp_config['secret']=ntp_worksheet.cell(row_num,8).value
 
             ntp_config_list["items"].append(ntp_config)
+    logger.info("got new ntp config from spreadsheet")
     return ntp_config_list
 
 def get_vifgs_config_from_spreadsheet_for_this_ar(received_config_spreadsheet,received_ar_ip_addr):
@@ -506,13 +537,12 @@ def get_hostgroups_config_from_spreadsheet_for_this_ar(received_config_spreadshe
             hostgroup_config["desc"]=hostgroups_worksheet.cell(row_num,3).value
             hostgroup_config["enabled"]=hostgroups_worksheet.cell(row_num,4).value
 
-            print(f"\n\t\t\t\t\t\tcell data {string_to_list(hostgroups_worksheet.cell(row_num,5).value)}\n")
+            logger.debug(f"cell data {string_to_list(hostgroups_worksheet.cell(row_num,5).value)}")
             hostgroup_config["hosts"]=string_to_list(hostgroups_worksheet.cell(row_num,5).value)
-            print()
+
             if not hostgroups_worksheet.cell(row_num,6).value == None: #no hostgroup id means a new hostgroup. used for telling the difference between updating a current hostgroup or creating a new one
                 hostgroup_config["id"]=hostgroups_worksheet.cell(row_num,6).value
 
-            #print(f"\tmemememememememe  \t\t\t\t\t\t{(hostgroups_worksheet.cell(row_num,7).value)} data type is {type((hostgroups_worksheet.cell(row_num,7).value))} length is {len((hostgroups_worksheet.cell(row_num,7).value))}\t {(hostgroups_worksheet.cell(row_num,7).value)[0]}")
             if not hostgroups_worksheet.cell(row_num,7).value == None:
                 hostgroup_config["member_hostgroups"]=string_to_list(hostgroups_worksheet.cell(row_num,7).value)
 
@@ -598,21 +628,21 @@ def get_definitions_list_first_and_last_row_number(received_ar_ip_addr,received_
         elif row_num == received_worksheet.max_row:
             last_row_num_definitions_list=row_num
 
-    print(f"first definition row is {first_row_num_definitions_list}")
-    print(f"last definition row is {last_row_num_definitions_list}")
+    logger.debug(f"first definition row is {first_row_num_definitions_list}")
+    logger.debug(f"last definition row is {last_row_num_definitions_list}")
     return(first_row_num_definitions_list,last_row_num_definitions_list)
 
 def get_transport_rules_list_first_and_last_row_number(received_ar_ip_addr,received_worksheet,received_current_row,received_definitions_rules_list_last_row_num):
-    print(f"transport received row {received_current_row}")
+    logger.debug(f"transport received row {received_current_row}")
     first_row_num_transport_rule_list = received_current_row
     last_row_num_transport_rule_list = 0
     for row_num in range(received_current_row,received_definitions_rules_list_last_row_num+1):
-        print (f"\t\t{received_worksheet.cell(row_num,1).value} row number is {row_num}")
+        logger.debug (f"\{received_worksheet.cell(row_num,1).value} row number is {row_num}")
         if received_worksheet.cell(row_num+1,1).value != None or row_num==received_definitions_rules_list_last_row_num:
             last_row_num_transport_rule_list = row_num
             break
-    print(f"first transport rule row is {first_row_num_transport_rule_list}")
-    print(f"last transport rule row is {last_row_num_transport_rule_list}")
+    logger.debug(f"first transport rule row is {first_row_num_transport_rule_list}")
+    logger.debug(f"last transport rule row is {last_row_num_transport_rule_list}")
     return (first_row_num_transport_rule_list,last_row_num_transport_rule_list)
 
 def find_how_many_rows_are_in_an_application_rule(received_worksheet,received_conffig_row):
@@ -655,7 +685,6 @@ def find_how_many_definitions_there_are_in_app_rule_and_rows_in_definition(recei
             if def_rule_count == 1 and row_num == first_row_of_app_rule:
                 def_rule_info={}
                 def_rule_info["first_row"]=row_num
-                #print("this is the first rule")
 
             elif def_rule_count == 1 and row_num == last_row_of_app_rule:
          
@@ -671,11 +700,11 @@ def find_how_many_definitions_there_are_in_app_rule_and_rows_in_definition(recei
                 rule_list.append(def_rule_info)
                 def_rule_info={}
                 def_rule_info["first_row"]=row_num
-                #print("this is the next rule")
+
             elif row_num == last_row_of_app_rule:
                 rule_list.append(def_rule_info)
                 def_rule_info["last_row"]=row_num
-                #print("this is the last rule")
+  
 
         return rule_list
 
@@ -693,11 +722,12 @@ def get_definition_data_from_spreadsheet(received_worksheet,received_app_rule_ro
 
 
             if received_worksheet.cell(row_num,8).value != None:
+
                 transport_rule['ports'] = received_worksheet.cell(row_num,8).value 
-                #print(f"cell vlaue is {received_worksheet.cell(row_num,7).value}, data type is {type(received_worksheet.cell(row_num,7).value)}")
+                logger.debug(f"cell vlaue is {received_worksheet.cell(row_num,7).value}, data type is {type(received_worksheet.cell(row_num,7).value)}")
             if received_worksheet.cell(row_num,9).value != None:
                 transport_rule['ip_protocol'] = received_worksheet.cell(row_num,9).value 
-                #print(received_worksheet.cell(row_num,8).value)
+                logger.debug(received_worksheet.cell(row_num,8).value)
             
             transport_rule_list.append(transport_rule)
         definition_item['transport_rules']=transport_rule_list
@@ -706,15 +736,17 @@ def get_definition_data_from_spreadsheet(received_worksheet,received_app_rule_ro
     return definition_items         
   
 def get_app_rules_definitions(received_worksheet,received_conffig_row):
-    print(f"\there at the def rules, config row number is {received_conffig_row}")
+
+    logger.debug(f"\there at the def rules, config row number is {received_conffig_row}")
     
     definition_items_list=[]
     first_row_of_app_rule, last_row_of_app_rule = find_how_many_rows_are_in_an_application_rule(received_worksheet,received_conffig_row)
-    print(f"first row of app is:- {first_row_of_app_rule}\t last row is {last_row_of_app_rule}")
-    print(f"max row number{received_worksheet.max_row}")
+    logger.debug(f":- first row of app is{first_row_of_app_rule}\t last row is {last_row_of_app_rule}")
+    logger.debug(f"max row number{received_worksheet.max_row}")
     app_rule_rows_list = find_how_many_definitions_there_are_in_app_rule_and_rows_in_definition(received_worksheet,first_row_of_app_rule,last_row_of_app_rule)
-    #print(f"\t\t\there at the def rules, app rule row number is {app_rule_rows_list}")
+    logger.debug(f"there at the def rules, app rule row number is {app_rule_rows_list}")
     definition_items_list = get_definition_data_from_spreadsheet(received_worksheet,app_rule_rows_list)
+    logger.debug(f"the definition list is {definition_items_list}")
     return definition_items_list
     
 def get_application_config_from_spreadsheet_for_this_ar(received_config_spreadsheet,received_ar_ip_addr):
@@ -728,6 +760,7 @@ def get_application_config_from_spreadsheet_for_this_ar(received_config_spreadsh
     for row_num in range(2,apps_worksheet.max_row+1):
         if apps_worksheet.cell(row_num,ip_address_column_num).value == received_ar_ip_addr:
             app_config_row_list.append(row_num)
+
     for conffig_row in app_config_row_list:
         item={}
 
@@ -783,9 +816,9 @@ def get_config_of_what_user_wants_configured_for_this_ar_from_spreadsheet(receiv
     return return_configs_for_ar
 
 def get_ar_configuration_from_spreadsheet_and_push_out_ars(received_list_of_ars,what_to_configure):
-    print("=========================================================")
+
     for ar_device in received_list_of_ars:
-        print(ar_device.ip_addr)
+        logger.info(f"getting config from spreadsheet for:- {ar_device.ip_addr}")
         new_ar_config = get_config_of_what_user_wants_configured_for_this_ar_from_spreadsheet(ar_device.ip_addr,MGMT_SPREADSHEET_PATH,what_to_configure)
 
         if ar_device.affirm_new_config_is_good(new_ar_config):
@@ -824,6 +857,7 @@ if __name__ == "__main__":
     args = vars(ap.parse_args())
     username = format(args["username"])
     password = getpass()
+    logger.info ('got username and password')
     list_of_ars = get_AR_configuration_and_update_AR_mgmt_spreadsheet(username,password,AR_LIST_CSV_FILE_PATH)
 
     ar_config_work_book = openpyxl.load_workbook(MGMT_SPREADSHEET_PATH)
@@ -858,15 +892,3 @@ if __name__ == "__main__":
 
             print(f"Config options are {CONFIG_OPTIONS_LIST}")
             config_options = input("To exit, type 'ex""it' or leave blank.\n>>>>> ")
-
-    """
-            for ar_device in list_of_ars:
-                new_ar_config = get_config_of_what_user_wants_configured_for_this_ar_from_spreadsheet(ar_device.ip_addr,MGMT_SPREADSHEET_PATH,config_options)
-
-
-
-            if config_options in CONFIG_OPTIONS_LIST:
-                print("\n###############\t##############\t#############\n\tgetting new config\n###############\t##############\t#############\n")
-                get_ar_configuration_from_spreadsheet_and_push_out_ars(list_of_ars,config_options)
-    """
-            

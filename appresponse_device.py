@@ -1,13 +1,25 @@
 #from xmlrpc.client import boolean
 import requests
 import json
+import logging
+import logging.config
+import yaml
 import appresponse_mgmt_api
 
+#with open('logging.conf', "r") as f:
+#    config = yaml.safe_load(f)
+#    logging.config.dictConfig(config)
+
+logger = logging.getLogger(__name__)
+
+
 class AppResponse:
-    
+
+
     num_of_ars = int(0)
     
     def __init__(self,ip_addr,bearer_token):
+        logger.info(f'initlize AR deivce, {ip_addr}')
         self.ip_addr=ip_addr
         self.bearer_token=bearer_token
         self.new_config = False
@@ -43,6 +55,7 @@ class AppResponse:
         self.urls_original_data = self.urls_class.get_data_with_api_call()
     
         AppResponse.num_of_ars += 1
+        logger.info (f'number of AppResponse is {AppResponse.num_of_ars}')
       
 
     def update_ar_device_config(self,received_new_config_option):
@@ -58,35 +71,44 @@ class AppResponse:
             self.urls_class.deploy_new_config()
         elif "apps" in received_new_config_option:
             self.ar_apps_class.deploy_new_config()
+        logger.info(f'updated ar config, sections "{received_new_config_option}"')
         
     def affirm_new_config_is_good(self,received_new_config_options):
         print(received_new_config_options)
         if "snmp" in received_new_config_options:
             self.conifg_status = self.snmp_class.affirm_new_config(received_new_config_options['snmp'],self.snmp_original_data,self.ip_addr)
+            logger.info(f'new config for config option "{received_new_config_options.keys()}" if {self.conifg_status}')
             return self.conifg_status
         elif "dns" in received_new_config_options:
             self.conifg_status = self.dns_class.affirm_new_config(received_new_config_options['dns'],self.dns_original_data,self.ip_addr)
+            logger.info(f'new config for config option "{received_new_config_options.keys()}" if {self.conifg_status}')
             return self.conifg_status
         elif "ntp" in received_new_config_options:
             self.conifg_status = self.ntp_class.affirm_new_config(received_new_config_options['ntp'],self.ntp_original_data,self.ip_addr)
+            logger.info(f'new config for config option "{received_new_config_options.keys()}" if {self.conifg_status}')
             return self.conifg_status
         elif "hostgroups" in received_new_config_options:
             self.conifg_status = self.hostgroups_class.affirm_new_config(received_new_config_options['hostgroups'],self.hostgroups_original_data,self.ip_addr)
+            logger.info(f'new config for config option "{received_new_config_options.keys()}" if {self.conifg_status}')
             return self.conifg_status
         elif "urls" in received_new_config_options:
             self.conifg_status = self.urls_class.affirm_new_config(received_new_config_options['urls'],self.urls_original_data,self.ip_addr)
+            logger.info(f'new config for config option "{received_new_config_options.keys()}" if {self.conifg_status}')
             return self.conifg_status
         elif "apps" in received_new_config_options:
             self.conifg_status = self.ar_apps_class.affirm_new_config(received_new_config_options['apps'],self.ar_apps_original_data,self.ip_addr)
+            logger.info(f'new config for config option "{received_new_config_options.keys()}" if {self.conifg_status}')
             return self.conifg_status
 
     def print_old_and_new_config_plus_config_status(self,received_new_config_option):
 
         if self.conifg_status:
+            logger.info("new config is correct")
             print("\t\t\t#####################")
             print("\t\t\tNew Config is correct")
             print("\t\t\t#####################")
         else:
+            logger.error("new config is not correct")
             print("\t\t\t*************************")
             print("\t\t\tNew Config is not correct")
             print("\t\t\t*************************")
