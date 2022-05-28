@@ -42,9 +42,9 @@ class Appresponse_Mgmt:
         else:
             for char in received_data:
                 if not re.search(r"[a-zA-Z0-9_.]",char):
-                    logger.info(f"this char '{char}' is not allowed in host address")
-                    print (f"this char '{char}' is not allowed in host address")
-                    return False
+                    if not char = "-"
+                        logger.info(f"this char '{char}' is not allowed in host address {received_data}")
+                        return False
             if received_data.endswith('.'):
                 logger.info(f"'{received_data}' host address can't end with a dot")
                 print(f"'{received_data}' host address can't end with a dot")
