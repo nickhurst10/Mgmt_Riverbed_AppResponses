@@ -194,7 +194,7 @@ def confirm_rest_api_access_to_ARs_and_get_bearer_token(received_username,receiv
             ar_ip_addr_and_bearer_token_list.append(ar_ip_addr_and_bearer_token)
             logger.info(f'add bearer and {ar_ip_addr} to list to return')
         else: 
-            logger.error(f'bearer token from {"ar_ip_addr":ar_ip_addr} is blank')
+            logger.error(f'bearer token from {ar_ip_addr} is blank')
 
     return (ar_ip_addr_and_bearer_token_list)
 
@@ -851,7 +851,7 @@ def  main(received_username,received_password):
 if __name__ == "__main__":
     date_time = datetime.now()
     str_date_time = date_time.strftime("%d-%m-%H-%M-%S")
-    
+    logger.info (f"run time start time {str_date_time}")
     ap = argparse.ArgumentParser()
     ap.add_argument("-u","--username", required=True,help="username")
     args = vars(ap.parse_args())
@@ -869,10 +869,10 @@ if __name__ == "__main__":
     print("Please reveiw and update the spreadsheet with any configuration changes.")
     print("\n\nOnce you have finished updating the spreadsheet,")
     print(f"Category options are {CONFIG_OPTIONS_LIST}")
-    config_options = input("To exit, type 'exit' or leave blank.\n>>>>> ")
+    config_options = ' '
     
     while not config_options in ["exit",""]:
-
+        config_options = input("To exit, type 'exit' or leave blank.\n>>>>> ")
         if config_options in CONFIG_OPTIONS_LIST:
 
             all_new_configs_are_good = check_new_configs_are_correct_for_config_option(list_of_ars,MGMT_SPREADSHEET_PATH,config_options)
@@ -891,4 +891,5 @@ if __name__ == "__main__":
 
 
             print(f"Config options are {CONFIG_OPTIONS_LIST}")
-            config_options = input("To exit, type 'ex""it' or leave blank.\n>>>>> ")
+        else:
+            print("Invalid option try again")

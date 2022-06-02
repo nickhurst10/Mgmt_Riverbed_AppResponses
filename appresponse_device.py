@@ -102,16 +102,6 @@ class AppResponse:
 
     def print_old_and_new_config_plus_config_status(self,received_new_config_option):
 
-        if self.conifg_status:
-            logger.info("new config is correct")
-            print("\t\t\t#####################")
-            print("\t\t\tNew Config is correct")
-            print("\t\t\t#####################")
-        else:
-            logger.error("new config is not correct")
-            print("\t\t\t*************************")
-            print("\t\t\tNew Config is not correct")
-            print("\t\t\t*************************")
         if "snmp" in received_new_config_option: 
             self.snmp_class.print_old_and_new_config()
         elif "dns" in received_new_config_option:
@@ -124,6 +114,16 @@ class AppResponse:
             self.urls_class.print_old_and_new_config()
         elif "apps" in received_new_config_option:
             self.ar_apps_class.print_old_and_new_config()
+        if self.conifg_status:
+            logger.info("new config is correct")
+            print("\t\t\t#####################")
+            print("\t\t\tNew Config is correct")
+            print("\t\t\t#####################")
+        else:
+            logger.error("new config is not correct")
+            print("\t\t\t*************************")
+            print("\t\t\tNew Config is not correct")
+            print("\t\t\t*************************")
 
 
     def push_out_new_config(self,received_new_config_options):
